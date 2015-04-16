@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using System.Web;
 using System.Collections;
 using System.Diagnostics;
+using System.Threading;
 
 namespace LazyModule
 {
@@ -43,9 +44,30 @@ namespace LazyModule
             if (IsSpecialPage(request))
                 return;
 
+
+            //For dead lock
+            if (request.Url.ToString().ToUpper().Contains("ORDER/7"))
+            {
+                MethodA();
+            }
+            if (request.Url.ToString().ToUpper().Contains("ORDER/13"))
+            {
+                MethodB();
+            }
+
+            //Session Affinity(Exception)
+            if (request.Url.ToString().ToUpper().Contains("ORDER/16"))
+            {
+                HttpContext.Current.Session["userdata"] = "123";
+            }
+
+            //For Slowness
             if (request.Url.ToString().ToUpper().Contains("ORDER/1"))
             {
-                System.Threading.Thread.Sleep(15000);
+                if (!request.Url.ToString().ToUpper().Contains("ORDER/13"))
+                {
+                    System.Threading.Thread.Sleep(15000);
+                }
             }
         }
 
@@ -64,12 +86,17 @@ namespace LazyModule
             {
                 Woops();
             }
+            
         }
-
         private void OnPreRequestHandlerExecute(Object source, EventArgs e)
         {
             HttpApplication app = (HttpApplication)source;
             HttpRequest request = app.Context.Request;
+
+            HttpContext.Current.Response.Headers.Remove("Server");
+            HttpContext.Current.Response.Headers.Remove("X-AspNet-Version");
+            HttpContext.Current.Response.Headers.Remove("X-Powered-By");
+
 
             Trace.TraceInformation("OnPreRequestHandlerExecute: " + request.Url.ToString());
 
@@ -81,7 +108,6 @@ namespace LazyModule
                 throw new System.SystemException("woops, out of stock!");
             }
         }
-
         private void OnEndRequest(Object source, EventArgs e)
         {
             HttpApplication app = (HttpApplication)source;
@@ -89,7 +115,6 @@ namespace LazyModule
 
             Trace.TraceInformation("OnEndRequest: " + app.Context.Request.Url.ToString());
         }
-
         private void OnSendRequestContent(Object source, EventArgs e)
         {
             HttpApplication app = (HttpApplication)source;
@@ -107,8 +132,6 @@ namespace LazyModule
                     LeakContext(app.Context);
             }
         }
-
-
         private void LeakContext(HttpContext context)
         {
             for (int i = 0; i < 500; i++)
@@ -124,18 +147,40 @@ namespace LazyModule
                 Fib(40);
             }
         }
-
         private int Fib(int n)
         {
             if (n < 3) return 1;
             return Fib(n - 1) + Fib(n - 2);
         }
-
         private bool IsSpecialPage(HttpRequest request)
         {
             return request.Url.ToString().ToUpper().Contains("ERROR");
         }
 
+        private static object A = new object();
+        private static object B = new object();
+        static void MethodA()
+        {
+            lock (A)
+            {
+                Thread.Sleep(4000);
+                lock (B)
+                {
+                    Thread.Sleep(1000);
+                }
+            }
+        }
+        static void MethodB()
+        {
+            lock (B)
+            {
+                Thread.Sleep(4000);
+                lock (A)
+                {
+                    Thread.Sleep(1000);
+                }
+            }
+        }
 
         //private void OnEndRequest(Object source, EventArgs e)
         //{
@@ -148,6 +193,7 @@ namespace LazyModule
         //    }
         //}
 
-
+        
     }
+ 
 }

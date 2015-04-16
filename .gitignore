@@ -190,3 +190,4 @@ ModelManifest.xml
 
 #symbo
 *.pdb
+/Site/bin/LazyModule.dll
